@@ -245,7 +245,8 @@ fn main() {
     #[derive(Debug)] struct ShardVec<T>(Vec<T>);
     impl<T> ShardVec<T> {
         fn from(values: Vec<T>) -> Self {
-            // We don't assert here, because it could be d, p, or d + p.
+            // These are the only two cases I do right now:
+            assert!(values.len() == d || values.len() == p);
             ShardVec(values)
         }
 
@@ -265,6 +266,7 @@ fn main() {
             let mut one_hot: Vec<Lit> = vec![false_lit; chunks_per_shard * d];
             one_hot[chunks_per_shard * input_shard + input_chunk] = true_lit;
             let outputs = evaluate_ssa(&mut instance, &one_hot, &encoder_config);
+            assert!(outputs.len() == chunks_per_shard * p);
             let mut b = Vec::new();
             for output_shard in 0..p {
                 let mut c = Vec::new();
@@ -273,7 +275,6 @@ fn main() {
                 }
                 b.push(ChunkVec::from(c));
             }
-            assert!(outputs.len() == chunks_per_shard * p);
             a.push(ShardVec::from(b));
         }
         ssa_evaluations.0.push(ChunkVec::from(a));
@@ -298,22 +299,22 @@ fn main() {
             &mut instance, chunks_per_shard * d, chunks_per_shard * d,
         );
 
-        for input_shard in 0..d {
-            
-        }
-
         // We test chunkwise.
-        for chunk in (0..chunks_per_shard).map(ChunkIndex) {
-            let mut decode_input_chunk_mask = Vec::new();
-            for have_index in &shards_we_have {
-                // Check if this is a data shard, or a parity shard.
-                if have_index.0 < d {
-                    let mut one_hot = ShardVec::from(vec![false_lit; d]);
-                    *one_hot.at_mut(*have_index) = true_lit;
-                    decode_input_chunk_mask.extend(one_hot.0);
-                } else {
-                    //let mut result = Vec::new();
-                    //for 
+        for input_chunk in (0..chunks_per_shard).map(ChunkIndex) {
+            // We now specify for each chunk we got, whether or not it contains this input chunk.
+            let mut input_bits: Vec<Lit> = Vec::new();
+            for have_shard_index in &shards_we_have {
+                for have_chunk in (0..chunks_per_shard).map(ChunkIndex) {
+                    // Check if this is a data shard, or a parity shard.
+                    let new_bit = if have_shard_index.0 < d {
+                        if have_shard_index.0 == input_shard && have_chunk == input_chunk {
+                            true_lit
+                        } else {
+                            false_lit
+                        }
+                    } else {
+                    }
+                    input_bits.push(new_bit);
                 }
             }
             // Make sure we recovered each output appropriately.
